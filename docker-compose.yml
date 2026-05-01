@@ -1,0 +1,7 @@
+services:
+    mini-secure-app:
+        build: .
+        container-name: mini-secure-app
+        ports:
+            - '3001:3001'
+        restart: always
