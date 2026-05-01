@@ -1,5 +1,6 @@
 services:
     mini-secure-app:
+        container_name: mini-secure-app
         build: .
         ports:
             - '3001:3001'
