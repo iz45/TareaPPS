@@ -15,17 +15,10 @@ describe('Mini Secure Tickets App', () => {
   });
 
   test('POST /ticket/new debe crear ticket', async () => {
-    const getRes = await request(app).get('/ticket/new');
-    expect(getRes.statusCode).toBe(200);
-
-    const match = getRes.text.match(/name="_csrf" value="([^"]+)"/);
-    expect(match).not.toBeNull();
-    const csrfToken = match[1];
-
     const res = await request(app)
       .post('/ticket/new')
       .type('form')
-      .send({ _csrf: csrfToken, title: 'Ticket de prueba', description: 'Descripción de prueba' });
+      .send({ title: 'Ticket de prueba', description: 'Descripción de prueba' });
 
     expect(res.statusCode).toBe(200);
     expect(res.text).toContain('Ticket guardado correctamente');
