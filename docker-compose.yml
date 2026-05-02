@@ -3,5 +3,5 @@ services:
         container_name: mini-secure-app
         build: .
         ports:
-            - '3001:3001'
+            - '3002:2:3001'
         restart: always
