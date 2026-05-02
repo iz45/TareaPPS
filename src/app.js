@@ -1,5 +1,4 @@
 const express = require('express');
-const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -7,31 +6,16 @@ const PORT = process.env.PORT || 3001;
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// =============================================
-// FIX CSRF: Almacén de tokens válidos en memoria
-// =============================================
-const validCsrfTokens = new Set();
-
-function createToken() {
-  const token = crypto.randomBytes(32).toString('hex');
-  validCsrfTokens.add(token);
-  // El token expira en 1 hora
-  setTimeout(() => validCsrfTokens.delete(token), 3600000);
-  return token;
-}
-
-function validateCsrf(req, res, next) {
-  const token = req.body._csrf;
-  if (!token || !validCsrfTokens.has(token)) {
-    return res.status(403).send('<h1>Error 403: Token CSRF inválido o expirado</h1><p><a href="/">Volver</a></p>');
-  }
-  validCsrfTokens.delete(token); // Uso único
+// FIX CSP: Cabeceras de seguridad
+app.use((req, res, next) => {
+  res.setHeader("Content-Security-Policy",
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; form-action 'self';"
+  );
+  res.setHeader("X-Frame-Options", "DENY");
   next();
-}
+});
 
-// =============================================
 // "Base de datos" en memoria
-// =============================================
 const tickets = [
   { id: 1, title: 'Error al iniciar sesión', description: 'No puedo acceder con mi usuario' },
   { id: 2, title: 'Fallo en el panel', description: 'El dashboard carga lentamente' }
@@ -39,13 +23,8 @@ const tickets = [
 
 const comments = [];
 
-// =============================================
-// RUTAS
-// =============================================
-
 // Página principal
 app.get('/', (req, res) => {
-  const csrf = createToken();
   res.send(`
     <html>
       <head>
@@ -70,7 +49,6 @@ app.get('/', (req, res) => {
 
         <h2>Añadir comentario</h2>
         <form action="/comment" method="POST">
-          <input type="hidden" name="_csrf" value="${csrf}" />
           <textarea name="comment" rows="4" cols="50" placeholder="Escribe un comentario"></textarea><br/>
           <button type="submit">Guardar comentario</button>
         </form>
@@ -81,14 +59,12 @@ app.get('/', (req, res) => {
 
 // Login simple
 app.get('/login', (req, res) => {
-  const csrf = createToken();
   res.send(`
     <html>
       <head><title>Login</title></head>
       <body>
         <h1>Login</h1>
         <form action="/login" method="POST">
-          <input type="hidden" name="_csrf" value="${csrf}" />
           <label>Usuario:</label>
           <input type="text" name="username" /><br/><br/>
           <label>Contraseña:</label>
@@ -101,14 +77,13 @@ app.get('/login', (req, res) => {
   `);
 });
 
-app.post('/login', validateCsrf, (req, res) => {
+app.post('/login', (req, res) => {
   const { username } = req.body;
-  const safeUsername = (username || 'usuario').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   res.send(`
     <html>
       <head><title>Bienvenido</title></head>
       <body>
-        <h1>Bienvenido, ${safeUsername}</h1>
+        <h1>Bienvenido, ${username || 'usuario'}</h1>
         <p>Login simulado correctamente.</p>
         <p><a href="/">Ir al inicio</a></p>
       </body>
@@ -143,14 +118,12 @@ app.get('/tickets', (req, res) => {
 
 // Formulario nuevo ticket
 app.get('/ticket/new', (req, res) => {
-  const csrf = createToken();
   res.send(`
     <html>
       <head><title>Nuevo ticket</title></head>
       <body>
         <h1>Crear ticket</h1>
         <form action="/ticket/new" method="POST">
-          <input type="hidden" name="_csrf" value="${csrf}" />
           <label>Título:</label>
           <input type="text" name="title" /><br/><br/>
           <label>Descripción:</label><br/>
@@ -163,7 +136,7 @@ app.get('/ticket/new', (req, res) => {
   `);
 });
 
-app.post('/ticket/new', validateCsrf, (req, res) => {
+app.post('/ticket/new', (req, res) => {
   const { title, description } = req.body;
 
   tickets.push({
@@ -185,7 +158,7 @@ app.post('/ticket/new', validateCsrf, (req, res) => {
 
 // Búsqueda
 app.get('/search', (req, res) => {
-  const q = (req.query.q || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const q = req.query.q || '';
 
   const results = tickets.filter(
     (t) =>
@@ -219,10 +192,10 @@ app.get('/search', (req, res) => {
 });
 
 // Guardar comentario
-app.post('/comment', validateCsrf, (req, res) => {
+app.post('/comment', (req, res) => {
   const { comment } = req.body;
-  const safeComment = (comment || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  comments.push(safeComment);
+
+  comments.push(comment || '');
 
   res.send(`
     <html>
