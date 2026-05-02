@@ -1,21 +1,59 @@
 const express = require('express');
-const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// =============================================
+// FIXES DE SEGURIDAD - Cabeceras HTTP seguras
+// =============================================
+app.use((req, res, next) => {
+  // FIX 2+3: Content Security Policy (evita XSS y clickjacking)
+  res.setHeader("Content-Security-Policy",
+    "default-src 'self'; " +
+    "script-src 'self'; " +
+    "style-src 'self' 'unsafe-inline'; " +
+    "frame-ancestors 'none'; " +
+    "form-action 'self';"
+  );
+  // FIX 3: Anti-Clickjacking
+  res.setHeader("X-Frame-Options", "DENY");
+  // FIX 4: Cabeceras Cross-Origin
+  res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+  res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
+  // FIX 5: Permissions Policy (restringe APIs del navegador)
+  res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+  // FIX 7: Evita MIME sniffing
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  next();
+});
+
+// FIX 6: Ocultar que la app usa Express
+app.disable('x-powered-by');
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 // =============================================
-// FIX CSRF: Almacén de tokens válidos en memoria
+// FIX 1: Protección CSRF con tokens
 // =============================================
+const crypto = require('crypto');
+
+// Generador de tokens CSRF simples (sin dependencias extra)
+function generateCsrfToken(req) {
+  if (!req.csrfToken) {
+    req.csrfToken = crypto.randomBytes(32).toString('hex');
+  }
+  return req.csrfToken;
+}
+
+// Almacén temporal de tokens válidos (en memoria)
 const validCsrfTokens = new Set();
 
 function createToken() {
   const token = crypto.randomBytes(32).toString('hex');
   validCsrfTokens.add(token);
-  // El token expira en 1 hora
+  // Expira en 1 hora
   setTimeout(() => validCsrfTokens.delete(token), 3600000);
   return token;
 }
@@ -103,6 +141,7 @@ app.get('/login', (req, res) => {
 
 app.post('/login', validateCsrf, (req, res) => {
   const { username } = req.body;
+  // Escapamos el username para evitar XSS
   const safeUsername = (username || 'usuario').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   res.send(`
     <html>
@@ -221,6 +260,7 @@ app.get('/search', (req, res) => {
 // Guardar comentario
 app.post('/comment', validateCsrf, (req, res) => {
   const { comment } = req.body;
+  // Escapamos el comentario para evitar XSS
   const safeComment = (comment || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   comments.push(safeComment);
 
